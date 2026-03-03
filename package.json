@@ -1,0 +1,17 @@
+{
+  "name": "nota-fiscal-api",
+  "version": "1.0.0",
+  "description": "API para extração de endereço de nota fiscal usando OpenAI",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.104.0",
+    "sqlite3": "^5.1.7"
+  }
+}
