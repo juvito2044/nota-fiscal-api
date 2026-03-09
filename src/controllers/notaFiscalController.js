@@ -1,65 +1,84 @@
-const path = require("path")
-const db = require("../database/database")
-const { extrairEnderecoDaImagem } = require("../services/openaiService")
+const path = require("path");
+const fs = require("fs");
+const db = require("../database/database");
+const { extrairEnderecoDaImagem } = require("../services/openaiService");
 
 function validarEndereco(endereco) {
-  const campos = ["logradouro", "numero", "bairro", "cidade", "estado", "cep"]
+  const campos = ["logradouro", "numero", "bairro", "cidade", "estado", "cep"];
+
   for (const c of campos) {
-    if (!(c in endereco)) return false
-    if (typeof endereco[c] !== "string") return false
+    if (!(c in endereco)) return false;
+    if (typeof endereco[c] !== "string") return false;
   }
-  return true
+
+  return true;
 }
 
 async function enviarNotaFiscal(req, res) {
+  let caminhoImagem = null;
+
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "Imagem é obrigatória" })
+      return res.status(400).json({ error: "Imagem é obrigatória" });
     }
 
-    const caminhoImagem = path.resolve(req.file.path)
+    caminhoImagem = path.resolve(req.file.path);
 
-    const respostaIA = await extrairEnderecoDaImagem(caminhoImagem)
+    const respostaIA = await extrairEnderecoDaImagem(caminhoImagem);
 
-    let endereco
+    let endereco;
     try {
-      endereco = JSON.parse(respostaIA)
+      endereco = JSON.parse(respostaIA);
     } catch {
-      return res.status(500).json({ error: "Resposta inválida da IA (não é JSON)" })
+      return res.status(500).json({ error: "Resposta inválida da IA (não é JSON)" });
     }
 
     if (!validarEndereco(endereco)) {
-      return res.status(500).json({ error: "Resposta inválida da IA (campos faltando)" })
+      return res.status(500).json({ error: "Resposta inválida da IA (campos faltando)" });
     }
 
-    // valida CEP minimamente (só dígitos e tamanho)
-    const cepDigits = endereco.cep.replace(/\D/g, "")
+    const cepDigits = endereco.cep.replace(/\D/g, "");
+
     if (cepDigits.length !== 8) {
-      return res.status(400).json({ error: "CEP não encontrado ou inválido" })
+      return res.status(400).json({ error: "CEP não encontrado ou inválido" });
     }
 
-    // salva CEP no banco
+    const cepFormatado = cepDigits.replace(/^(\d{5})(\d{3})$/, "$1-$2");
+    endereco.cep = cepFormatado;
+
     db.run(
       "INSERT INTO ceps (cep, created_at) VALUES (?, ?)",
-      [endereco.cep, new Date().toISOString()],
+      [cepFormatado, new Date().toISOString()],
       (err) => {
-        if (err) console.error("Erro ao salvar CEP:", err)
+        if (err) {
+          console.error("Erro ao salvar CEP:", err);
+        }
       }
-    )
+    );
 
-    // retorna apenas o endereço em JSON (exigido)
-    return res.json(endereco)
+    return res.json(endereco);
   } catch (error) {
-    console.error("ERRO /nota-fiscal:", error)
-    return res.status(500).json({ error: "Erro ao processar nota fiscal" })
+    console.error("ERRO /nota-fiscal:", error);
+    return res.status(500).json({
+      error: error.message || "Erro ao processar nota fiscal",
+    });
+  } finally {
+    if (caminhoImagem && fs.existsSync(caminhoImagem)) {
+      fs.unlink(caminhoImagem, (err) => {
+        if (err) console.error("Erro ao remover arquivo temporário:", err);
+      });
+    }
   }
 }
 
 function listarCeps(req, res) {
   db.all("SELECT cep FROM ceps ORDER BY id DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: "Erro ao buscar CEPs" })
-    return res.json(rows)
-  })
+    if (err) {
+      return res.status(500).json({ error: "Erro ao buscar CEPs" });
+    }
+
+    return res.json(rows);
+  });
 }
 
-module.exports = { enviarNotaFiscal, listarCeps }
+module.exports = { enviarNotaFiscal, listarCeps };
