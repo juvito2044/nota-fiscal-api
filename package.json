@@ -4,7 +4,8 @@
   "description": "API para extração de endereço de nota fiscal usando OpenAI",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
